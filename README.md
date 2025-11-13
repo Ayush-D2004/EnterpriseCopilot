@@ -1,3 +1,7 @@
+## Enterprise Copilot
+
+**Link to web app :** https://enterprisecopilot.streamlit.app/
+
 🎯 **Problem Statement** : Enterprises have massive internal documentation — from HR policies to engineering guidelines — but searching them is inefficient. People waste time and risk getting outdated or incorrect info.
 - **Solution** : an AI assistant that accurately answers natural language questions using retrieval-augmented generation (RAG) and provides source citations for every answer.
 - **Benefits** : 
