@@ -61,7 +61,7 @@ def load_all_indexes():
         merged_db.merge_from(db)
 
     retriever = merged_db.as_retriever(search_kwargs={"k": 4})
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro", google_api_key=os.getenv("GEMINI_API_KEY"))
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=os.getenv("GEMINI_API_KEY"))
 
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
