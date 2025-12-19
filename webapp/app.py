@@ -340,6 +340,10 @@ with st.sidebar:
     # Track processed files per session to avoid duplicate work
     if "processed_files" not in st.session_state:
         st.session_state.processed_files = set()
+    
+    # Track if we're currently processing to avoid duplicate processing
+    if "is_processing" not in st.session_state:
+        st.session_state.is_processing = False
 
     data_dir = "data"
     index_dir = "index"
@@ -356,14 +360,17 @@ with st.sidebar:
         return False
 
     # Only process files if uploaded or force_reprocess, else just load if indexes exist
-    need_processing = uploaded_files or force_reprocess
-    if need_processing:
+    need_processing = (uploaded_files is not None and len(uploaded_files) > 0) or (force_reprocess and uploaded_files is not None)
+    
+    # Don't process if already processing or if no new files
+    if need_processing and not st.session_state.is_processing:
+        st.session_state.is_processing = True  # Set processing flag
         saved_files = []
         processed_files = []
         skipped_files = []
         errors = []
         with st.spinner("🧠 Uploading and processing documents..."):
-            if uploaded_files:
+            if uploaded_files and len(uploaded_files) > 0:
                 for uploaded_file in uploaded_files:
                     safe_filename = uploaded_file.name.replace(" ", "_")
                     file_path = os.path.join(data_dir, safe_filename)
@@ -400,6 +407,7 @@ with st.sidebar:
         if errors:
             show_toast(f"❌ Failed to process: {', '.join(errors)}", "error")
         st.session_state.should_rerun = True
+        st.session_state.is_processing = False  # Reset processing flag
     elif has_valid_indexes() and not st.session_state.get("rag_chain"):
         # If indexes exist and rag_chain not loaded, load it
         try:
@@ -561,13 +569,16 @@ if (selected == "Assistant" and
     """, unsafe_allow_html=True)
 
     try:
-        response = st.session_state.rag_chain.invoke({"query": prompt})
-        # Log the full response for debugging
-        # logging.info(f"Gemini chain raw response: {response}")
-        st.sidebar.markdown(f"**Gemini chain raw response:** {response}")
-        full_response = response.get('result', "I couldn't generate a response based on the documents.")
+        # Get the answer from the chain
+        answer = st.session_state.rag_chain.invoke(prompt)
+        
+        # Get source documents from the retriever
+        sources = st.session_state.rag_chain.retriever.get_relevant_documents(prompt)
+        
+        # Log the response for debugging
+        st.sidebar.markdown(f"**Gemini chain raw response:** {answer}")
+        full_response = answer if answer else "I couldn't generate a response based on the documents."
 
-        sources = response.get('source_documents', [])
         if sources:
             unique_sources = list(set(d.metadata.get("source", "Unknown") for d in sources))
             if unique_sources:

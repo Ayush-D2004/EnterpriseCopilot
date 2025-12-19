@@ -3,9 +3,10 @@ import os
 import google.generativeai as genai
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -38,6 +39,19 @@ Question: {question}
 Answer: 
 """)
 
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+class RAGChain:
+    """Wrapper class to hold both the chain and retriever"""
+    def __init__(self, chain, retriever):
+        self.chain = chain
+        self.retriever = retriever
+    
+    def invoke(self, question):
+        """Invoke the chain with a question"""
+        return self.chain.invoke(question)
+
 def load_all_indexes():
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     dbs = []
@@ -63,11 +77,13 @@ def load_all_indexes():
     retriever = merged_db.as_retriever(search_kwargs={"k": 4})
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=os.getenv("GEMINI_API_KEY"))
 
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=retriever,
-        chain_type="stuff",
-        chain_type_kwargs={"prompt": custom_prompt},
-        return_source_documents=True
+    # Create modern LangChain chain using LCEL
+    chain = (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | custom_prompt
+        | llm
+        | StrOutputParser()
     )
-    return qa_chain
+    
+    # Return wrapper with both chain and retriever
+    return RAGChain(chain, retriever)
