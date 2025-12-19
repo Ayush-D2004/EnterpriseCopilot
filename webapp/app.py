@@ -501,11 +501,8 @@ if selected == "Assistant":
 
     # Chat input
     if prompt := st.chat_input("💬 Ask me anything about your documents..."):
-        if st.session_state.rag_chain:
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            st.rerun()
-        else:
-            show_toast("⚠️ Please process your documents first!", "warning")
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.rerun()
 
 # --- DASHBOARD PAGE ---
 elif selected == "Dashboard":
@@ -556,8 +553,7 @@ elif selected == "Dashboard":
 # --- RAG RESPONSE HANDLING ---
 if (selected == "Assistant" and 
     st.session_state.messages and 
-    st.session_state.messages[-1]["role"] == "user" and 
-    st.session_state.rag_chain):
+    st.session_state.messages[-1]["role"] == "user"):
     
     prompt = st.session_state.messages[-1]["content"]
     thinking_placeholder = st.empty()
@@ -568,36 +564,52 @@ if (selected == "Assistant" and
     </div>
     """, unsafe_allow_html=True)
 
-    try:
-        # Get the answer from the chain
-        answer = st.session_state.rag_chain.invoke(prompt)
+    # Check if we have a RAG chain (documents uploaded)
+    if st.session_state.rag_chain:
+        try:
+            # Get the answer from the chain
+            answer = st.session_state.rag_chain.invoke(prompt)
+            
+            # Get source documents from the retriever using invoke method
+            sources = st.session_state.rag_chain.retriever.invoke(prompt)
+            
+            # Log the response for debugging
+            st.sidebar.markdown(f"**Gemini chain raw response:** {answer}")
+            full_response = answer if answer else "I couldn't generate a response based on the documents."
+
+            if sources:
+                unique_sources = list(set(d.metadata.get("source", "Unknown") for d in sources))
+                if unique_sources:
+                    source_text = "\n\n---\n**Sources:**\n"
+                    for doc_path in unique_sources:
+                        source_text += f"- `{os.path.basename(doc_path)}`\n"
+                    full_response += source_text
+
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
+            thinking_placeholder.empty()
+            st.rerun()
+
+        except Exception as e:
+            logging.error(f"Answer generation error: {e}")
+            import traceback
+            tb = traceback.format_exc()
+            error_msg = f"Error getting answer: {str(e)}\nTraceback:\n{tb}"
+            st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            thinking_placeholder.empty()
+            st.rerun()
+    
+    else:
+        # No documents uploaded - provide a friendly response
+        prompt_lower = prompt.lower().strip()
         
-        # Get source documents from the retriever
-        sources = st.session_state.rag_chain.retriever.get_relevant_documents(prompt)
+        # Handle greetings and common questions
+        if any(greeting in prompt_lower for greeting in ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']):
+            response = "👋 Hello! I'm Enterprise Copilot, your AI-powered business assistant. \n\nI can help you analyze and answer questions about your company documents. To get started, please upload some documents using the sidebar on the left. \n\nWhat would you like to know?"
+        elif any(question in prompt_lower for question in ['how are you', 'what can you do', 'help', 'what are you']):
+            response = "I'm doing great! 🚀 I'm Enterprise Copilot, an AI assistant designed to help you with your business documents and knowledge base.\n\n**Here's what I can do:**\n- Analyze PDF, DOCX, and TXT documents\n- Answer questions based on your uploaded content\n- Provide citations and sources for my responses\n- Help you find specific information quickly\n\nTo get started, upload some company documents using the sidebar, and then ask me anything about them!"
+        else:
+            response = f"I'd be happy to help you with that! However, I need some documents to work with first.\n\nPlease upload your company documents (PDF, DOCX, or TXT files) using the sidebar on the left, and then I can answer questions like: '{prompt}'\n\nOnce you upload documents, I'll be able to provide detailed, source-backed answers to your questions. What documents would you like to upload?"
         
-        # Log the response for debugging
-        st.sidebar.markdown(f"**Gemini chain raw response:** {answer}")
-        full_response = answer if answer else "I couldn't generate a response based on the documents."
-
-        if sources:
-            unique_sources = list(set(d.metadata.get("source", "Unknown") for d in sources))
-            if unique_sources:
-                source_text = "\n\n---\n**Sources:**\n"
-                for doc_path in unique_sources:
-                    source_text += f"- `{os.path.basename(doc_path)}`\n"
-                full_response += source_text
-
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        st.session_state.messages.append({"role": "assistant", "content": response})
         thinking_placeholder.empty()
-        st.rerun()
-
-    except Exception as e:
-        logging.error(f"Answer generation error: {e}")
-        import traceback
-        tb = traceback.format_exc()
-        error_msg = f"Error getting answer: {str(e)}\nTraceback:\n{tb}"
-        st.session_state.messages.append({"role": "assistant", "content": error_msg})
-        thinking_placeholder.empty()
-        show_toast("❌ Failed to get answer", "error")
-        st.sidebar.markdown(f"**Gemini error:** {error_msg}")
         st.rerun()
