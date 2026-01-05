@@ -6,6 +6,9 @@ import logging
 import random
 import shutil
 from ingest import process_pdfs_for_file
+import assemblyai as aai
+from audio_recorder_streamlit import audio_recorder
+import io
 from qa_pipeline import load_all_indexes
 
 import warnings
@@ -48,20 +51,41 @@ def load_css():
         [data-testid="stSidebar"] h3 {
             color: #2c3e50;
         }
-        [data-testid="stSidebar"] .stButton > button {
+        /* Global Button Styling */
+        .stButton > button {
             background: linear-gradient(90deg, #3498db, #2c3e50);
             border: none;
             color: white;
             font-weight: 600;
-            border-radius: 8px;
-            padding: 0.6rem 1.2rem;
+            border-radius: 12px;
+            padding: 0.5rem 1rem;
             transition: all 0.3s ease;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            height: 42px; /* Fixed height for consistency */
         }
-        [data-testid="stSidebar"] .stButton > button:hover {
+        .stButton > button:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
             background: linear-gradient(90deg, #2980b9, #1a2530);
+        }
+        
+        /* Styled Input Fields */
+        .stTextInput > div > div > input {
+            border-radius: 12px;
+            border: 1px solid #e0e0e0;
+            padding: 10px 15px;
+            height: 42px; /* Match button height */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            transition: border-color 0.3s;
+        }
+        .stTextInput > div > div > input:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        /* Sidebar specific overrides if needed */
+        [data-testid="stSidebar"] .stButton > button {
+            width: 100%;
         }
 
         /* Enhanced chat bubbles */
@@ -499,10 +523,70 @@ if selected == "Assistant":
             """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Chat input
-    if prompt := st.chat_input("💬 Ask me anything about your documents..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        st.rerun()
+    # Custom Chat Input with Voice Support
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("---")
+    
+    # Callback for submission
+    def submit():
+        st.session_state.submitted = True
+
+    # Process Submission (Handling this before widget instantiation to avoid StreamlitAPIException)
+    if st.session_state.get("submitted", False):
+        prompt = st.session_state.get("chat_input_widget", "")
+        if prompt:
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.session_state.chat_input_widget = "" # Safely clear input
+            st.session_state.submitted = False
+            st.rerun()
+        else:
+            st.session_state.submitted = False
+
+    input_container = st.container()
+    with input_container:
+        col_audio, col_text, col_btn = st.columns([0.6, 10, 0.8], gap="small", vertical_alignment="center")
+        
+        with col_audio:
+            # Align the mic better
+            audio_bytes = audio_recorder(
+                text="",
+                recording_color="#e74c3c",
+                neutral_color="#3498db",
+                icon_name="microphone",
+                icon_size="2x"
+            )
+            
+        # Handle Audio Transcription
+        if audio_bytes:
+            if "last_audio" not in st.session_state:
+                st.session_state.last_audio = None
+                
+            if st.session_state.last_audio != audio_bytes:
+                st.session_state.last_audio = audio_bytes
+                
+                try:
+                    with st.spinner("Transcribing audio..."):
+                        aai.settings.api_key = os.getenv("ASSEMBLY_AI_API")
+                        transcriber = aai.Transcriber()
+                        transcript = transcriber.transcribe(io.BytesIO(audio_bytes))
+                        
+                        if transcript.text:
+                            st.session_state.chat_input_widget = transcript.text
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"Transcription error: {e}")
+
+        with col_text:
+            st.text_input(
+                "Message", 
+                key="chat_input_widget", 
+                label_visibility="collapsed",
+                placeholder="💬 Ask me anything about your documents...",
+                on_change=submit
+            )
+
+        with col_btn:
+            st.button("➤", key="send_btn", on_click=submit, use_container_width=True)
 
 # --- DASHBOARD PAGE ---
 elif selected == "Dashboard":
