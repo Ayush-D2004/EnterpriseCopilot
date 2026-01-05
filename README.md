@@ -8,7 +8,7 @@ This project offers two implementations:
 1.  **Web Application**: A feature-rich Streamlit interface with voice support, dashboards, and file management.
 2.  **CLI**: A lightweight command-line interface for quick, terminal-based interactions.
 
-**Link to Streamlit app** : https://enterprisecopilot.streamlit.app/
+Link to Streamlit app : https://enterprisecopilot.streamlit.app/
 ---
 
 ## ✨ Features
@@ -33,7 +33,7 @@ This project offers two implementations:
 
 *   **LLM**: Google Gemini (via `langchain-google-genai`)
 *   **Embeddings**: HuggingFace Sentence Transformers (`all-MiniLM-L6-v2`)
-*   **Vector Query**: FAISS (Facebook AI Similarity Search)
+*   **Vector Query**: FAISS 
 *   **Orchestration**: LangChain
 *   **Web Framework**: Streamlit
 *   **Audio Transcription**: AssemblyAI
@@ -110,7 +110,7 @@ python app/main.py
 ```
 
 1.  Ensure you have processed documents (the CLI implementation expects an index to exist, or you can run `python app/ingest.py` separately if implemented).
-2.  Type your query when prompted `🧑 You:`.
+2.  Type your query when prompted.
 3.  View the AI response and sources directly in the terminal.
 
 ---
